@@ -83,7 +83,21 @@ function startListening(){
             speak("Today is " + now.toDateString());
         }
         else{
-            speak("Sorry, I did not understand that.");
+    fetch("/api", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({message: command})
+    })
+    .then(response => response.json())
+    .then(data => {
+        speak(data.reply);
+    })
+    .catch(() => {
+        speak("I cannot connect right now.");
+    });
+        }
         }
     };
 
