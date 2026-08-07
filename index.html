@@ -82,12 +82,33 @@ function startListening(){
             const now = new Date();
             speak("Today is " + now.toDateString());
         }
-        else{
+        else {
     fetch("/api", {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
         },
+        body: JSON.stringify({
+            message: command
+        })
+    })
+    .then(async response => {
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || "Request failed");
+        }
+
+        return data;
+    })
+    .then(data => {
+        speak(data.reply || "I did not get an answer from Gemini.");
+    })
+    .catch(error => {
+        console.error(error);
+        speak("I could not connect to Gemini.");
+    });
+        }
         body: JSON.stringify({message: command})
     })
     .then(response => response.json())
