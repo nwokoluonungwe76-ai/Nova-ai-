@@ -1,0 +1,97 @@
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nova AI</title>
+<style>
+body{
+    font-family:Arial,sans-serif;
+    background:#111;
+    color:white;
+    text-align:center;
+    padding:30px;
+}
+h1{
+    color:#00e5ff;
+}
+button{
+    padding:15px 25px;
+    font-size:18px;
+    border:none;
+    border-radius:10px;
+    background:#00e5ff;
+    cursor:pointer;
+}
+#output{
+    margin-top:20px;
+    font-size:20px;
+}
+</style>
+</head>
+<body>
+
+<h1>🤖 Nova AI</h1>
+
+<button onclick="startListening()">🎤 Talk to Nova</button>
+
+<p id="output">Press the microphone and speak.</p>
+
+<script>
+const output = document.getElementById("output");
+
+function speak(text){
+    output.innerText = text;
+    const speech = new SpeechSynthesisUtterance(text);
+    speech.lang = "en-US";
+    speech.rate = 1;
+    speech.pitch = 1;
+    window.speechSynthesis.speak(speech);
+}
+
+function startListening(){
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if(!SpeechRecognition){
+        alert("Speech Recognition is not supported on this browser.");
+        return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.start();
+
+    recognition.onresult = function(event){
+        const command = event.results[0][0].transcript.toLowerCase();
+
+        if(command.includes("hello")){
+            speak("Hello! I am Nova. Nice to meet you.");
+        }
+        else if(command.includes("how are you")){
+            speak("I am doing great. Thank you for asking.");
+        }
+        else if(command.includes("what is your name")){
+            speak("My name is Nova.");
+        }
+        else if(command.includes("time")){
+            const now = new Date();
+            speak("The time is " + now.toLocaleTimeString());
+        }
+        else if(command.includes("date")){
+            const now = new Date();
+            speak("Today is " + now.toDateString());
+        }
+        else{
+            speak("Sorry, I did not understand that.");
+        }
+    };
+
+    recognition.onerror = function(){
+        speak("I could not hear you. Please try again.");
+    };
+}
+</script>
+
+</body>
+</html
