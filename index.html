@@ -1,123 +1,565 @@
-p<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nova AI</title>
+
 <style>
-body{
-    font-family:Arial,sans-serif;
-    background:#111;
-    color:white;
-    text-align:center;
-    padding:30px;
+* {
+  box-sizing: border-box;
 }
-h1{
-    color:#00e5ff;
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #070a10;
+  color: white;
+  min-height: 100vh;
 }
-button{
-    padding:15px 25px;
-    font-size:18px;
-    border:none;
-    border-radius:10px;
-    background:#00e5ff;
-    cursor:pointer;
+
+.app {
+  width: 100%;
+  max-width: 520px;
+  margin: auto;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
-#output{
-    margin-top:20px;
-    font-size:20px;
+
+header {
+  padding: 22px 18px 14px;
+  text-align: center;
+  border-bottom: 1px solid #202633;
+}
+
+header h1 {
+  margin: 0;
+  color: #00e5ff;
+  font-size: 28px;
+}
+
+header p {
+  margin: 7px 0 0;
+  color: #8d98a8;
+  font-size: 14px;
+}
+
+#chat {
+  flex: 1;
+  padding: 18px;
+  overflow-y: auto;
+}
+
+.message {
+  max-width: 88%;
+  padding: 12px 15px;
+  margin: 10px 0;
+  border-radius: 15px;
+  line-height: 1.5;
+  word-wrap: break-word;
+}
+
+.nova {
+  background: #151b26;
+  margin-right: auto;
+}
+
+.user {
+  background: #006b78;
+  margin-left: auto;
+}
+
+#typing {
+  display: none;
+  color: #8d98a8;
+  padding: 0 18px 8px;
+  font-size: 13px;
+}
+
+.controls {
+  padding: 12px;
+  border-top: 1px solid #202633;
+  background: #0b0f17;
+}
+
+.input-row {
+  display: flex;
+  gap: 8px;
+}
+
+#message {
+  flex: 1;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #293241;
+  border-radius: 12px;
+  background: #111722;
+  color: white;
+  outline: none;
+  font-size: 16px;
+}
+
+button {
+  border: none;
+  cursor: pointer;
+  border-radius: 12px;
+  color: white;
+  font-weight: bold;
+}
+
+#send {
+  width: 58px;
+  background: #00a8bd;
+  font-size: 20px;
+}
+
+#mic {
+  width: 58px;
+  background: #743cff;
+  font-size: 20px;
+}
+
+.quick {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding-top: 10px;
+}
+
+.quick button {
+  flex-shrink: 0;
+  padding: 9px 13px;
+  background: #18202d;
+  color: #cbd5e1;
+}
+
+.status {
+  text-align: center;
+  padding: 8px;
+  font-size: 12px;
+  color: #64e6a8;
 }
 </style>
 </head>
+
 <body>
 
-<h1>🤖 Nova AI</h1>
+<div class="app">
 
-<button onclick="startListening()">🎤 Talk to Nova</button>
+<header>
+  <h1>🤖 Nova AI</h1>
+  <p>Your personal AI assistant</p>
+</header>
 
-<p id="output">Press the microphone and speak.</p>
+<div id="chat">
+  <div class="message nova">
+    Hello! I'm Nova. Ask me anything. You can type or use the microphone.
+  </div>
+</div>
+
+<div id="typing">Nova is thinking...</div>
+
+<div class="controls">
+
+  <div class="input-row">
+    <input
+      id="message"
+      type="text"
+      placeholder="Ask Nova anything..."
+      autocomplete="off"
+    >
+
+    <button id="mic" title="Speak">🎤</button>
+    <button id="send" title="Send">➤</button>
+  </div>
+
+  <div class="quick">
+    <button onclick="sendQuick('What is the time?')">Time</button>
+    <button onclick="sendQuick('What is today?')">Date</button>
+    <button onclick="sendQuick('Tell me a joke')">Joke</button>
+    <button onclick="sendQuick('Open YouTube')">YouTube</button>
+    <button onclick="sendQuick('Open WhatsApp')">WhatsApp</button>
+  </div>
+
+  <div class="status" id="status">
+    Nova is ready
+  </div>
+
+</div>
+
+</div>
 
 <script>
-const output = document.getElementById("output");
 
-function speak(text){
-    output.innerText = text;
-    const speech = new SpeechSynthesisUtterance(text);
-    speech.lang = "en-US";
-    speech.rate = 1;
-    speech.pitch = 1;
-    window.speechSynthesis.speak(speech);
+const chat = document.getElementById("chat");
+const messageInput = document.getElementById("message");
+const sendButton = document.getElementById("send");
+const micButton = document.getElementById("mic");
+const typing = document.getElementById("typing");
+const statusText = document.getElementById("status");
+
+function addMessage(text, type) {
+  const div = document.createElement("div");
+
+  div.className = "message " + type;
+
+  div.textContent = text;
+
+  chat.appendChild(div);
+
+  chat.scrollTop = chat.scrollHeight;
 }
 
-function startListening(){
+function speak(text) {
+  if (!("speechSynthesis" in window)) {
+    return;
+  }
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  window.speechSynthesis.cancel();
 
-    if(!SpeechRecognition){
-        alert("Speech Recognition is not supported on this browser.");
-        return;
+  const speech = new SpeechSynthesisUtterance(text);
+
+  speech.rate = 1;
+  speech.pitch = 1;
+
+  window.speechSynthesis.speak(speech);
+}
+
+function setStatus(text) {
+  statusText.textContent = text;
+}
+
+function getLocalAnswer(text) {
+
+  const command = text.toLowerCase().trim();
+
+  if (
+    command.includes("hello") ||
+    command.includes("hi nova") ||
+    command === "hi"
+  ) {
+    return "Hello! I'm Nova. What can I help you with?";
+  }
+
+  if (command.includes("your name")) {
+    return "My name is Nova, your AI assistant.";
+  }
+
+  if (
+    command.includes("how are you") ||
+    command.includes("how are u")
+  ) {
+    return "I'm doing great and ready to help you.";
+  }
+
+  if (
+    command.includes("what is the time") ||
+    command === "time" ||
+    command.includes("current time")
+  ) {
+    return "The time is " +
+      new Date().toLocaleTimeString();
+  }
+
+  if (
+    command.includes("what is today") ||
+    command.includes("what day") ||
+    command === "date"
+  ) {
+    return "Today is " +
+      new Date().toLocaleDateString(
+        undefined,
+        {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric"
+        }
+      );
+  }
+
+  if (command.includes("month")) {
+    return "The current month is " +
+      new Date().toLocaleDateString(
+        undefined,
+        { month: "long" }
+      );
+  }
+
+  if (command.includes("year")) {
+    return "The current year is " +
+      new Date().getFullYear();
+  }
+
+  if (command.includes("open youtube")) {
+    window.open("https://www.youtube.com", "_blank");
+    return "Opening YouTube.";
+  }
+
+  if (command.includes("open whatsapp")) {
+    window.open("https://web.whatsapp.com", "_blank");
+    return "Opening WhatsApp.";
+  }
+
+  if (command.includes("open google")) {
+    window.open("https://www.google.com", "_blank");
+    return "Opening Google.";
+  }
+
+  if (command.includes("open facebook")) {
+    window.open("https://www.facebook.com", "_blank");
+    return "Opening Facebook.";
+  }
+
+  if (command.includes("open instagram")) {
+    window.open("https://www.instagram.com", "_blank");
+    return "Opening Instagram.";
+  }
+
+  if (command.includes("open tiktok")) {
+    window.open("https://www.tiktok.com", "_blank");
+    return "Opening TikTok.";
+  }
+
+  if (command.includes("open camera")) {
+    return "Camera control will be added when Nova becomes a proper Android app.";
+  }
+
+  if (
+    command.includes("free fire") ||
+    command.includes("freefire")
+  ) {
+    window.open(
+      "https://ff.garena.com/",
+      "_blank"
+    );
+
+    return "Opening Free Fire.";
+  }
+
+  if (command.includes("tell me a joke")) {
+    return "Why did the computer go to the doctor? Because it had a virus.";
+  }
+
+  if (
+    command === "thanks" ||
+    command.includes("thank you")
+  ) {
+    return "You're welcome!";
+  }
+
+  if (
+    command === "bye" ||
+    command.includes("goodbye")
+  ) {
+    return "Goodbye! I'll be here when you need me.";
+  }
+
+  return null;
+}
+
+async function askAI(text) {
+
+  typing.style.display = "block";
+  setStatus("Nova is thinking...");
+
+  try {
+
+    const response = await fetch("/api/chat", {
+
+      method: "POST",
+
+      headers: {
+        "Content-Type": "application/json"
+      },
+
+      body: JSON.stringify({
+        message: text
+      })
+
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "AI request failed");
     }
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = "en-US";
-    recognition.start();
+    const reply =
+      data.reply ||
+      "I couldn't generate a response.";
 
-    recognition.onresult = function(event){
-        const command = event.results[0][0].transcript.toLowerCase();
+    addMessage(reply, "nova");
 
-        if(command.includes("hello")){
-            speak("Hello! I am Nova. Nice to meet you.");
-        }
-        else if(command.includes("how are you")){
-            speak("I am doing great. Thank you for asking.");
-        }
-        else if(command.includes("what is your name")){
-            speak("My name is Nova.");
-        }
-        else if(command.includes("time")){
-            const now = new Date();
-            speak("The time is " + now.toLocaleTimeString());
-        }
-        else if(command.includes("date")){
-            const now = new Date();
-            speak("Today is " + now.toDateString());
-        }
-        else {
-    fetch("/api", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            message: command
-        })
-    })
-    .then(async response => {
-        const data = await response.json();
+    speak(reply);
 
-        if (!response.ok) {
-            throw new Error(data.error || "Request failed");
-        }
+    setStatus("Nova is ready");
 
-        return data;
-    })
-    .then(data => {
-        speak(data.reply || "I did not get an answer from Gemini.");
-    })
-    .catch(error => {
-        console.error(error);
-        speak("I could not connect to Gemini.");
-    });
-        }
-        
-        }
-        }
-    };
+  } catch (error) {
 
-    recognition.onerror = function(){
-        speak("I could not hear you. Please try again.");
-    };
+    console.error(error);
+
+    const localAnswer = getLocalAnswer(text);
+
+    if (localAnswer) {
+
+      addMessage(localAnswer, "nova");
+
+      speak(localAnswer);
+
+      setStatus("Nova is ready");
+
+    } else {
+
+      const errorMessage =
+        "I couldn't connect to my AI brain right now. Please check the server.";
+
+      addMessage(errorMessage, "nova");
+
+      speak(errorMessage);
+
+      setStatus("Connection problem");
+
+    }
+
+  } finally {
+
+    typing.style.display = "none";
+
+  }
 }
+
+async function sendMessage() {
+
+  const text = messageInput.value.trim();
+
+  if (!text) {
+    return;
+  }
+
+  addMessage(text, "user");
+
+  messageInput.value = "";
+
+  const localAnswer = getLocalAnswer(text);
+
+  if (localAnswer) {
+
+    addMessage(localAnswer, "nova");
+
+    speak(localAnswer);
+
+    return;
+
+  }
+
+  await askAI(text);
+}
+
+function sendQuick(text) {
+
+  messageInput.value = text;
+
+  sendMessage();
+
+}
+
+sendButton.addEventListener(
+  "click",
+  sendMessage
+);
+
+messageInput.addEventListener(
+  "keydown",
+  function(event) {
+
+    if (event.key === "Enter") {
+      sendMessage();
+    }
+
+  }
+);
+
+let recognition = null;
+
+const SpeechRecognition =
+  window.SpeechRecognition ||
+  window.webkitSpeechRecognition;
+
+if (SpeechRecognition) {
+
+  recognition = new SpeechRecognition();
+
+  recognition.lang = "en-US";
+
+  recognition.continuous = false;
+
+  recognition.interimResults = false;
+
+  recognition.onstart = function() {
+
+    micButton.textContent = "🔴";
+
+    setStatus("Listening...");
+
+  };
+
+  recognition.onresult = function(event) {
+
+    const text =
+      event.results[0][0].transcript;
+
+    messageInput.value = text;
+
+    setStatus("Got it");
+
+    sendMessage();
+
+  };
+
+  recognition.onerror = function() {
+
+    micButton.textContent = "🎤";
+
+    setStatus("Microphone error");
+
+  };
+
+  recognition.onend = function() {
+
+    micButton.textContent = "🎤";
+
+  };
+
+  micButton.addEventListener(
+    "click",
+    function() {
+
+      try {
+        recognition.start();
+      } catch (error) {
+        console.log(error);
+      }
+
+    }
+  );
+
+} else {
+
+  micButton.addEventListener(
+    "click",
+    function() {
+
+      setStatus(
+        "Speech recognition is not supported here."
+      );
+
+    }
+  );
+
+}
+
 </script>
 
 </body>
