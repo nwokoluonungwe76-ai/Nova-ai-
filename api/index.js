@@ -37,7 +37,7 @@
     .logo {
       font-size: 30px;
       font-weight: bold;
-      color: #ffffff;
+      color: white;
     }
 
     .subtitle {
@@ -107,6 +107,10 @@
       outline: none;
     }
 
+    #input:focus {
+      border-color: #08a6b7;
+    }
+
     button {
       border: none;
       cursor: pointer;
@@ -123,6 +127,12 @@
     #sendBtn {
       width: 62px;
       background: #08a6b7;
+    }
+
+    #micBtn:active,
+    #sendBtn:active,
+    .quick-buttons button:active {
+      transform: scale(0.96);
     }
 
     .quick-buttons {
@@ -173,15 +183,12 @@
   </header>
 
   <main id="chat">
-
     <div class="message nova">
       Hello! I'm Nova. Ask me anything. You can type or use the microphone.
     </div>
-
   </main>
 
   <div class="bottom">
-
     <div class="bottom-inner">
 
       <div class="input-row">
@@ -205,7 +212,7 @@
           Time
         </button>
 
-        <button onclick="quickAsk('What is today\\'s date?')">
+        <button onclick="quickAsk('What is today\'s date?')">
           Date
         </button>
 
@@ -228,7 +235,6 @@
       </div>
 
     </div>
-
   </div>
 
 </div>
@@ -242,10 +248,11 @@
   const status = document.getElementById("status");
 
   /*
-    This stores the latest Gemini interaction.
+    Nova conversation memory
 
-    It allows Nova to continue the same conversation
-    by sending previousInteractionId to /api/chat.
+    We keep the latest Gemini interaction ID.
+    If an old/expired ID causes an error, Nova automatically
+    starts a fresh conversation instead of getting stuck.
   */
 
   let previousInteractionId =
@@ -277,11 +284,66 @@
   }
 
 
+  /*
+    Send request to Nova.
+
+    The important part is that previousInteractionId
+    is sent only when we actually have one.
+  */
+
+  async function askNova(text, interactionId) {
+
+    const body = {
+      message: text
+    };
+
+    if (
+      interactionId &&
+      typeof interactionId === "string"
+    ) {
+      body.previousInteractionId = interactionId;
+    }
+
+    const response = await fetch("/api/chat", {
+      method: "POST",
+
+      headers: {
+        "Content-Type": "application/json"
+      },
+
+      body: JSON.stringify(body)
+    });
+
+    let data = {};
+
+    try {
+      data = await response.json();
+    } catch (error) {
+      data = {};
+    }
+
+    if (!response.ok) {
+
+      const error = new Error(
+        data.error || "Server error"
+      );
+
+      error.status = response.status;
+
+      throw error;
+    }
+
+    return data;
+  }
+
+
   async function sendMessage() {
 
     const text = input.value.trim();
 
-    if (!text) return;
+    if (!text) {
+      return;
+    }
 
     addMessage(text, "user");
 
@@ -289,51 +351,63 @@
 
     setStatus("Nova is thinking...");
 
-    const thinking = addMessage(
-      "Thinking...",
-      "nova"
-    );
+    const thinking =
+      addMessage("Thinking...", "nova");
 
     thinking.classList.add("typing");
 
 
     try {
 
-      const response = await fetch("/api/chat", {
+      /*
+        FIRST ATTEMPT
+        Use the existing conversation ID.
+      */
 
-        method: "POST",
+      let data;
 
-        headers: {
-          "Content-Type": "application/json"
-        },
+      try {
 
-        body: JSON.stringify({
-
-          message: text,
-
-          /*
-            Send the previous Gemini interaction
-            so Nova can remember the conversation.
-          */
-
-          previousInteractionId:
-            previousInteractionId
-
-        })
-
-      });
-
-
-      const data = await response.json();
-
-
-      if (!response.ok) {
-
-        console.error("Nova API error:", data);
-
-        throw new Error(
-          data.error || "Server error"
+        data = await askNova(
+          text,
+          previousInteractionId
         );
+
+      } catch (firstError) {
+
+        /*
+          IMPORTANT FIX
+
+          If the saved interaction ID has expired,
+          become invalid, or came from an older version
+          of Nova, remove it and try the message again
+          as a brand-new conversation.
+
+          This prevents the permanent
+          "Connection problem" issue.
+        */
+
+        if (previousInteractionId) {
+
+          console.log(
+            "Old Nova interaction ID failed. Starting a new conversation."
+          );
+
+          previousInteractionId = null;
+
+          localStorage.removeItem(
+            "novaInteractionId"
+          );
+
+          data = await askNova(
+            text,
+            null
+          );
+
+        } else {
+
+          throw firstError;
+        }
       }
 
 
@@ -349,13 +423,13 @@
 
 
       /*
-        Save the new interaction ID.
-
-        The next message will use this ID,
-        allowing Gemini to continue the conversation.
+        Save ONLY the newest successful interaction ID.
       */
 
-      if (data.interactionId) {
+      if (
+        data.interactionId &&
+        typeof data.interactionId === "string"
+      ) {
 
         previousInteractionId =
           data.interactionId;
@@ -364,16 +438,24 @@
           "novaInteractionId",
           data.interactionId
         );
-
       }
 
 
       setStatus("Nova is ready");
 
 
+      /*
+        Make Nova speak the answer.
+      */
+
+      speakNova(reply);
+
     } catch (error) {
 
-      console.error(error);
+      console.error(
+        "Nova connection error:",
+        error
+      );
 
       thinking.remove();
 
@@ -386,9 +468,7 @@
         "Connection problem",
         true
       );
-
     }
-
   }
 
 
@@ -397,7 +477,6 @@
     input.value = text;
 
     sendMessage();
-
   }
 
 
@@ -413,10 +492,10 @@
 
       if (event.key === "Enter") {
 
+        event.preventDefault();
+
         sendMessage();
-
       }
-
     }
   );
 
@@ -446,10 +525,18 @@
       "click",
       function() {
 
-        setStatus("Listening...");
+        try {
 
-        recognition.start();
+          setStatus("Listening...");
 
+          recognition.start();
+
+        } catch (error) {
+
+          console.log(
+            "Recognition already running."
+          );
+        }
       }
     );
 
@@ -465,18 +552,21 @@
         setStatus("Nova is ready");
 
         sendMessage();
-
       };
 
 
     recognition.onerror =
-      function() {
+      function(event) {
+
+        console.log(
+          "Microphone error:",
+          event.error
+        );
 
         setStatus(
           "Microphone problem",
           true
         );
-
       };
 
 
@@ -489,9 +579,7 @@
         ) {
 
           setStatus("Nova is ready");
-
         }
-
       };
 
   } else {
@@ -506,30 +594,24 @@
 
       }
     );
-
   }
 
 
   /*
-    Speak Nova's answers aloud.
-
-    This is kept simple so it works with
-    the phone browser's speech engine.
+    Nova voice output
   */
-
-  const originalAddMessage =
-    addMessage;
-
 
   function speakNova(text) {
 
     if (
       !("speechSynthesis" in window)
     ) {
-
       return;
-
     }
+
+
+    window.speechSynthesis.cancel();
+
 
     const speech =
       new SpeechSynthesisUtterance(text);
@@ -540,13 +622,40 @@
 
     speech.pitch = 1;
 
+    speech.volume = 1;
+
+
     window.speechSynthesis.speak(
       speech
     );
-
   }
+
+
+  /*
+    If the browser is refreshed, the saved
+    conversation ID is kept so Nova can continue
+    the same conversation while the Gemini
+    interaction is still available.
+  */
+
+  window.addEventListener(
+    "beforeunload",
+    function() {
+
+      if (
+        previousInteractionId
+      ) {
+
+        localStorage.setItem(
+          "novaInteractionId",
+          previousInteractionId
+        );
+      }
+    }
+  );
 
 </script>
 
 </body>
 </html>
+```0
